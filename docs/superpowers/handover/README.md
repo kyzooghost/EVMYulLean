@@ -10,7 +10,7 @@ until the user starts the next session's work.
 ## Start here on the next machine
 
 1. Follow [SETUP.md](SETUP.md). The original machine's project-specific Lean
-   installation and build binaries are being removed after the push.
+   installation and build binaries were removed after the first branch push.
 2. Read the [implementation plan](../plans/2026-11-12-cross-chain-replay-lean.md),
    [design](../specs/2026-11-12-cross-chain-replay-lean-design.md),
    [mathematical specification](../../cross-chain-rolling-hash-replay-spec.md),
@@ -40,6 +40,8 @@ proofs are deferred until the user reviews the model and named statements.
 ## Repository state and scope
 
 - Branch: `cross-chain-rolling-hash`, created from local `main` at `902f81c`.
+- Implementation and initial handover checkpoint: `c1f291f`. A documentation-only
+  follow-up records verified local cleanup.
 - That pre-existing commit, `902f81c` (`new spec`), contains the 610-line Markdown
   specification. It is retained in the branch history.
 - Upstream `origin` points to `NethermindEth/EVMYulLean`; the new `fork` remote

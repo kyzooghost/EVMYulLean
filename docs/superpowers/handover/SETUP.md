@@ -99,19 +99,20 @@ Build/check success does not prove the replay theorem or EVM correspondence.
 
 ## Local cleanup requested by the user
 
-After the branch push, remove the original machine's project-specific binaries:
+Completed on the original machine on 2026-11-14 UTC, after the first branch push:
 
-- `~/.elan`: the session installed it, it contains only Lean 4.22.0, and its
-  `known-projects` file lists only this repository.
+- Removed `~/.elan`: the session installed it, it contained only Lean 4.22.0,
+  and its `known-projects` file listed only this repository.
 - This repository's `.lake/build` and dependency `.lake/build` directories.
 - Compiled Lake configuration files inside project/dependency `.lake` directories.
 - `~/.cache/mathlib` cache archives and its `leantar-0.1.15` binary/download. This
   cache directory was created during this project setup on 2026-11-12.
 
-Keep repository source, dependency source checkouts, system Git/curl/Python/cc,
-and the separate Solidity source tree. No elan lines were found in the checked
+Repository source, dependency source checkouts, system Git/curl/Python/cc,
+and the separate Solidity source tree were retained. No elan lines were found in the checked
 shell profile files, so no profile edits are required on the original machine.
 
+Absence of the toolchain, cache, and all listed build directories was verified.
 Those local binaries are not committed. Recreate them with the commands above.
 The handover validation happened before cleanup; the original machine cannot run
 Lean again until it is reinstalled.
