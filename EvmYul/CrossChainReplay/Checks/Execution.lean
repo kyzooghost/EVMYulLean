@@ -4,6 +4,8 @@ import EvmYul.CrossChainReplay.Checks.Fixtures
 
 open EvmYul.CrossChainReplay
 
+namespace ExecutionCheck
+
 #check advanceProtocol
 #check Step
 #check Step.proxyProbe
@@ -86,10 +88,11 @@ def probeExited (outcome : FrameOutcome) : ExecutionState ProbeToy :=
   { probeStart with frames := [(0 : Nat), (0 : Nat)], roles := [.proxy, .proxy], checkpoints := [probeCheckpoint], pendingOutcome := some outcome, attempted := [.engine toyObservation] }
 
 def resumedProbe (outcome : FrameOutcome) : ExecutionState ProbeToy :=
-  { (probeExited outcome) with frames := [(0 : Nat)], roles := [.proxy], scopes := if exitSuccess outcome then (probeExited outcome).scopes else probeCheckpoint.scopes, liveLogs := if exitSuccess outcome then (probeExited outcome).liveLogs else probeCheckpoint.liveLogs, checkpoints := [], pendingOutcome := none, probe := some { proxy := 0, depth := 1, outcome := outcome } }
+  { (probeExited outcome) with frames := [(0 : Nat)], roles := [.proxy], scopes := if exitSuccess outcome then (probeExited outcome).scopes else probeCheckpoint.scopes, liveLogs := if exitSuccess outcome then (probeExited outcome).liveLogs else probeCheckpoint.liveLogs, liveValidations := if exitSuccess outcome then (probeExited outcome).liveValidations else probeCheckpoint.liveValidations, checkpoints := [], pendingOutcome := none, probe := some { proxy := 0, depth := 1, outcome := outcome } }
 
-/-- Both failure causes resume through the same source branch while retaining their identity. -/
-example (outcome : FrameOutcome) : ∃ next,
+/-- `staticProbeFailureCauses`: both failure causes resume through the same source branch
+    while the resumed probe retains the distinct cause. -/
+theorem staticProbeFailureCauses (outcome : FrameOutcome) : ∃ next,
     Step ProbeToy toyParams (probeExited outcome) [] next ∧
     next.probe = some { proxy := 0, depth := 1, outcome := outcome } ∧
     next.attempted = [.engine toyObservation] := by
@@ -104,3 +107,5 @@ example (outcome : FrameOutcome) : ∃ next,
     · simp [ProbeToy, Toy, probeCheckpoint, checkpointWithKind, probeStart]
   · rfl
   · rfl
+
+end ExecutionCheck

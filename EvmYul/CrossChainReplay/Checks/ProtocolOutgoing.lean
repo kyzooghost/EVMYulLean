@@ -2,11 +2,13 @@ import EvmYul.CrossChainReplay.Protocol
 
 open EvmYul.CrossChainReplay
 
+namespace ProtocolOutgoingCheck
+
 private def hash (bytes : Bytes) : Hash32 :=
   Vector.ofFn fun i => UInt8.ofNat (bytes.length + i.val)
 
 private def parameters : Parameters :=
-  { keccak := hash, revision := { name := "toy", specificationId := "toy", enabledOperations := [], nativeOperations := [] }, localRollup := EvmYul.UInt256.ofNat 2, manager := 0, system := 0, proxyCreationCode := [] }
+  { keccak := hash, revision := { name := "toy", specificationId := "toy", enabledOperations := [], nativeOperations := [] }, localRollup := EvmYul.UInt256.ofNat 2, manager := 0, system := 0, proxyCreationCode := [], decodeManagerEntry := fun _ => none }
 
 private def outgoingHash : Hash32 := hash [9]
 private def entryId : EntryId := .preloaded 0
@@ -112,3 +114,9 @@ private def nestedOrderBQAroot : Bool :=
       | _ => false
   | _ => false
 #guard nestedOrderBQAroot
+
+/-- `nestedFoldOrder`: observed boundary records follow completion order `B, Q, A, root`. -/
+def nestedFoldOrder : Bool := nestedOrderBQAroot
+#guard nestedFoldOrder
+
+end ProtocolOutgoingCheck

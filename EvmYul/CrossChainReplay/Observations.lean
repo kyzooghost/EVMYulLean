@@ -2,10 +2,16 @@ import EvmYul.CrossChainReplay.Hashing
 
 namespace EvmYul.CrossChainReplay
 
+inductive StorageSpace where
+  | persistent | transient
+  deriving Repr, BEq, DecidableEq
+
 structure StorageLocation where
   chain : Word
   owner : Address
   slot : Word
+  /-- Transient storage (EIP-1153) is a separate key space with transaction lifetime. -/
+  space : StorageSpace := .persistent
   deriving Repr, BEq
 
 inductive AccessKind where
@@ -43,8 +49,11 @@ inductive CheckId where
   | lookupFreshness | lookupHash | transportSelector | transportLength
   deriving Repr, BEq
 
+/-- Fields of `EntryExecuted`, correlated with the consumed hash and logical occurrence. -/
 structure ValidationResult where
   selected : EntryId
+  entryHash : Hash32
+  declaredPeer : Word
   structuralHash : Hash32
   crossChainHash : Hash32
   incomingConsumed : Nat
@@ -93,6 +102,8 @@ structure AccountView where
   delegationTarget : Option Address
   empty : Bool
   creationEligible : Bool
+  /-- Transaction-local creation status (EIP-6780). -/
+  createdInTransaction : Bool := false
   deriving Repr, BEq
 
 structure AccountProjection where
@@ -103,12 +114,13 @@ structure AccountProjection where
   nonceZero : Bool
   empty : Bool
   creationEligible : Bool
+  createdInTransaction : Bool := false
   deriving Repr, BEq
 
 def accountProjection (view : AccountView) : AccountProjection :=
   { present := view.present, storedCode := view.storedCode,
     resolvedCode := view.resolvedCode, delegationTarget := view.delegationTarget,
     nonceZero := view.nonce == 0, empty := view.empty,
-    creationEligible := view.creationEligible }
+    creationEligible := view.creationEligible, createdInTransaction := view.createdInTransaction }
 
 end EvmYul.CrossChainReplay

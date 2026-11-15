@@ -88,6 +88,10 @@ inductive ProtocolControl where
   | resumeSystem (invocation : ManagerInvocation) (registered : ProxyRegistration) (success : Bool)
   | resolveTopLookup (hash : Hash32) (peer : Word) (staticMode : Bool)
   | load (batch : LoadBatch) (context : LoadContext)
+  /-- `executeIncomingCrossChainCall`: authorization and row-zero binding precede loading. -/
+  | inboundEntry (hash : Hash32) (batch : LoadBatch) (context : LoadContext)
+  /-- Unmatched selector, malformed calldata, or a nonpayable entry called with value. -/
+  | rejectEntry
   | selectProxy (hash : Hash32) (peer : Word)
   | selectInbound (hash : Hash32) (loaded : LoadResult)
   | processIncoming (scope : ScopeId) (count processed : Nat) (destination : ProcessDestination)
@@ -120,6 +124,8 @@ structure ProtocolContext where
   activeLookupPeer : Option Word := none
   lookupHost : Option Hash32 := none
   invocationSerial : Nat := 0
+  /-- Static permission inherited by the manager frame; persistent writes and logs then halt. -/
+  staticPermission : Bool := false
   deriving Repr, BEq
 
 end EvmYul.CrossChainReplay

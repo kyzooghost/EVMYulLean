@@ -2,6 +2,8 @@ import EvmYul.CrossChainReplay.Hashing
 
 open EvmYul.CrossChainReplay
 
+namespace HashingCheck
+
 #check CallIdentity
 #check IncomingCall
 #check EntryId
@@ -50,6 +52,12 @@ def transportBytes : Bytes :=
 #guard !isError (decodeContextResult toyHash (transportBytes ++ [99]))
 #guard isError (decodeContextResult toyHash ([0, 0, 0, 0] ++ List.replicate 160 0))
 
+/-- `transportDecoderBoundaries`: 163 bytes reject; 164 and 165 accept with the selector. -/
+def transportDecoderBoundaries : Bool :=
+  ([163, 164, 165].map fun n =>
+    isError (decodeContextResult toyHash ((transportBytes ++ [99]).take n))) == [true, false, false]
+#guard transportDecoderBoundaries
+
 def sampleContext : ContextResult :=
   { rollingHash := zeroHash
     outgoingCursor := EvmYul.UInt256.ofNat 7
@@ -65,7 +73,7 @@ def sampleContext : ContextResult :=
 #guard (ProtocolError.abiBytes toyHash (.unexpectedContextRevert [1])).length == 100
 
 def proxyParams : Parameters :=
-  { keccak := toyHash, revision := { name := "toy", specificationId := "toy", enabledOperations := [], nativeOperations := [] }, localRollup := EvmYul.UInt256.ofNat 2, manager := 3, system := 0, proxyCreationCode := [10, 11] }
+  { keccak := toyHash, revision := { name := "toy", specificationId := "toy", enabledOperations := [], nativeOperations := [] }, localRollup := EvmYul.UInt256.ofNat 2, manager := 3, system := 0, proxyCreationCode := [10, 11], decodeManagerEntry := fun _ => none }
 
 #guard (address20Bytes (1 : Address)).length == 20
 #guard (address20Bytes (1 : Address)).getLast? == some 1
@@ -76,3 +84,5 @@ def proxyParams : Parameters :=
   natFromBytes ((hashBytes (toyHash ([0xff] ++ address20Bytes proxyParams.manager ++
     hashBytes (proxySalt proxyParams 1 (EvmYul.UInt256.ofNat 2)) ++
     hashBytes (toyHash (proxyInitCode proxyParams 1 (EvmYul.UInt256.ofNat 2)))))).drop 12)
+
+end HashingCheck

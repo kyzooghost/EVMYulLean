@@ -1,5 +1,12 @@
 # Cross-chain rolling-hash Lean model handover
 
+> **Update 2026-11-15:** Tasks 1-10 are implemented and checked. The current status,
+> declaration map, assumptions, checks, and known gaps are in
+> [the review index](../../cross-chain-replay-lean-review.md), which supersedes the status
+> table below. The replay statements remain unproved, pending manual review. On this macOS
+> machine the pinned toolchain was installed with Homebrew's `elan-init` formula, then
+> `elan toolchain install leanprover/lean4:v4.22.0`.
+
 Recorded: 2026-11-14 UTC. Implementation is **paused at the user's request**.
 This is an unfinished model, not a verified replay theorem.
 

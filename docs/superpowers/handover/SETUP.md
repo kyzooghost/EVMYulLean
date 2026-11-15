@@ -66,8 +66,7 @@ of mathlib locally. It can download the `leantar` cache helper automatically.
 Do not run `lake update` to resolve an ordinary missing-cache issue.
 
 Check that `lean-toolchain`, `lakefile.lean`, and `lake-manifest.json` did not change.
-The current model aggregate excludes fixtures. The final `Checks.lean` aggregate
-is still a remaining Task 10 deliverable.
+The model aggregate excludes fixtures; `EvmYul/CrossChainReplay/Checks.lean` aggregates them.
 
 Use the narrow targets above. A full repository build can involve unrelated FFI
 targets and submodule/native-library setup outside this task's verified path.
@@ -82,7 +81,8 @@ for check in EvmYul/CrossChainReplay/Checks/*.lean; do
 done
 ```
 
-There are 15 files at handover, including `Fixtures.lean`. Successful `#check`
+There are 19 files as of 2026-11-15, including `Fixtures.lean`. The aggregate
+`lake build EvmYul.CrossChainReplay.Checks` builds them all. Successful `#check`
 output is normal. Every command must exit 0; do not replace assertions or add
 assumptions to obtain a pass.
 

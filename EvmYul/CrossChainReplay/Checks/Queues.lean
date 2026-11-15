@@ -2,6 +2,8 @@ import EvmYul.CrossChainReplay.Protocol
 
 open EvmYul.CrossChainReplay
 
+namespace QueuesCheck
+
 #check loadBatch
 #check selectProxyEntry
 #check selectInboundEntry
@@ -15,7 +17,7 @@ def testParams : Parameters :=
     localRollup := EvmYul.UInt256.ofNat 2
     manager := 0
     system := 0
-    proxyCreationCode := [] }
+    proxyCreationCode := [], decodeManagerEntry := fun _ => none }
 
 def sampleEntry (hash : Hash32) : Entry :=
   { declaredPeerRollup := EvmYul.UInt256.ofNat 1
@@ -172,3 +174,21 @@ example : nestedContextRepresentable (2 ^ 64 - 2) := by
 example : ¬ nestedContextRepresentable (2 ^ 64 - 1) := by
   unfold nestedContextRepresentable
   decide
+
+/-- `staleRemainderDrains`: after the selected row is cleared, only a stale row remains at or
+    after the head, so `_clearConsumedEntryAndDrain` drains the bucket. A live remainder keeps
+    the bucket and advances the head to it. -/
+def drainBucket (second : LoadedEntry) : ProtocolState :=
+  { buckets := [{
+      hash := testHash, head := 1, rows :=
+      [{ id := .preloaded 0, row := sampleEntry testHash, loadedBlock := 11, consumed := false }, second] }] }
+def staleRemainderDrains : Bool :=
+  let stale : LoadedEntry := { id := .preloaded 1, row := sampleEntry testHash, loadedBlock := 5, consumed := false }
+  let live : LoadedEntry := { id := .preloaded 1, row := sampleEntry testHash, loadedBlock := 11, consumed := false }
+  (bucketFor testHash (clearConsumed 10 testHash 0 (drainBucket stale))).map (fun b => (b.rows.length, b.head)) ==
+    some (0, 0) &&
+  (bucketFor testHash (clearConsumed 10 testHash 0 (drainBucket live))).map (fun b => (b.rows.length, b.head)) ==
+    some (2, 1)
+#guard staleRemainderDrains
+
+end QueuesCheck

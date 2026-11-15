@@ -3,6 +3,8 @@ import EvmYul.CrossChainReplay.Checks.Fixtures
 
 open EvmYul.CrossChainReplay
 
+namespace ProtocolStaticCheck
+
 private def lookupHash : Hash32 := toyHash [9]
 private def selected : EntryId := .driverLoaded 0 0
 private def hostScope : ScopeId := { entry := selected, invocationPath := [] }
@@ -77,3 +79,5 @@ private def wrongPeerState : ProtocolState :=
   | .failed _ _ (.entrySpansMultiplePeers expected found) _ =>
       expected == EvmYul.UInt256.ofNat 2 && found == EvmYul.UInt256.ofNat 1
   | _ => false
+
+end ProtocolStaticCheck

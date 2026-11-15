@@ -119,6 +119,8 @@ structure LogicalRequest where
 structure DriverEnvelope where
   kind : TransactionKind
   sender : Address
+  /-- Concrete nonce; a re-signed replay envelope may differ (spec section 3.1). -/
+  nonce : Nat
   destination : Option Address
   value : Word
   data : Bytes
@@ -138,6 +140,14 @@ structure RevisionDescriptor where
 def RevisionDescriptor.isPinned (v : RevisionDescriptor) : Prop :=
   v.specificationId ≠ ""
 
+/-- Decoded manager calldata for the external entry points used by drivers and proxies. -/
+inductive ManagerEntryCall where
+  | loadTable (entries : List Entry) (lookups : List TopLevelLookup)
+  | executeInbound (expectedHash : Hash32) (entries : List Entry) (lookups : List TopLevelLookup)
+  | executeCrossChain (source : Address) (data : Bytes)
+  | staticLookup (source : Address) (data : Bytes)
+  deriving Repr, BEq
+
 structure Parameters where
   keccak : HashFn
   revision : RevisionDescriptor
@@ -145,5 +155,8 @@ structure Parameters where
   manager : Address
   system : Address
   proxyCreationCode : Bytes
+  /-- Solidity ABI decoding of manager calldata; `none` models an unmatched selector or
+      malformed calldata. Correspondence with the compiled dispatcher is an obligation. -/
+  decodeManagerEntry : Bytes → Option ManagerEntryCall
 
 end EvmYul.CrossChainReplay

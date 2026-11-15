@@ -3,6 +3,8 @@ import EvmYul.CrossChainReplay.Checks.Fixtures
 
 open EvmYul.CrossChainReplay
 
+namespace CreationCheck
+
 #check CreationResult
 #check Step.engineCreate2
 #check Step.resumeCreation
@@ -118,3 +120,5 @@ example : Step RejectedToy toyParams rejectedStart [.engine createObservation, .
 #guard rejected.checkpoints.isEmpty
 #guard rejected.pendingOutcome == none
 #guard (RejectedToy.accountView rejected.world 0).nonce == 2
+
+end CreationCheck

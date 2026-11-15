@@ -4,6 +4,8 @@ import EvmYul.CrossChainReplay.Checks.Fixtures
 
 open EvmYul.CrossChainReplay
 
+namespace RollbackCheck
+
 #check checkpoint
 #check restore
 #check adoptTransport
@@ -48,7 +50,7 @@ def duringA : ExecutionState Toy :=
 def resumedA : ExecutionState Toy :=
   { duringA with world := beforeA.world, frames := [(0 : Nat)], roles := [.manager], protocol := { beforeA.protocol with control := .resumeIncoming sampleScope.id 1 1 .entryValidation hashA false [9] }, scopes := beforeA.scopes, liveLogs := [], checkpoints := [], pendingOutcome := none, probe := none }
 
-example : Step Toy toyParams duringA [] resumedA := by
+theorem rollbackStep : Step Toy toyParams duringA [] resumedA := by
   apply Step.resumeIncoming duringA savedA [] (0 : Nat) (0 : Nat) (0 : Nat) []
     (.reverted [9]) sampleScope.id 1 1 .entryValidation hashA beforeA.world
   · rfl
@@ -74,3 +76,21 @@ def onlyAFailureSurvives : Bool :=
         some [{ callHash := hashA, success := false, returnData := [9] }]
   | _ => false
 #guard onlyAFailureSurvives
+
+/-- `ordinaryRollback`: after A reverts, Q leaves the effective transcript and the restored
+    accumulator, while Q's attempted observation remains. Witnessed by `rollbackStep`. -/
+def ordinaryRollback : Bool :=
+  onlyAFailureSurvives && (Toy.readProtocol resumedA.world).outgoingCursor == 0 &&
+  resumedA.scopes.all (·.effective.isEmpty) &&
+  resumedA.attempted == [.protocol (.boundary sampleScope.id hashQ true [8])]
+#guard ordinaryRollback
+
+/-- `transportWithoutProvenance`: accepted decoded values change actual state, but no transcript
+    witness is manufactured. -/
+def transportWithoutProvenance : Bool :=
+  (Toy.readProtocol adopted.world).crossChainHash == toyHash [4] &&
+  (Toy.readProtocol adopted.world).incomingCursor == 7 &&
+  (adopted.scopes.head?).bind ScopeRecord.transportedWitness == none
+#guard transportWithoutProvenance
+
+end RollbackCheck

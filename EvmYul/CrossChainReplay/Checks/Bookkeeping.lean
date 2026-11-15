@@ -4,6 +4,8 @@ import EvmYul.CrossChainReplay.Checks.Fixtures
 
 open EvmYul.CrossChainReplay
 
+namespace BookkeepingCheck
+
 private def logObservation : EngineObservation :=
   { toyObservation with instruction := "LOG0", rawLogs := [[7]] }
 private def LogToy : EvmModel :=
@@ -46,3 +48,5 @@ private def attemptedScope (serial : Nat) : Option ScopeId :=
 #guard attemptedScope 10 == some { entry := .topLevelLookup 0 zeroHash, invocationPath := [10] }
 #guard attemptedScope 11 == some { entry := .topLevelLookup 0 zeroHash, invocationPath := [11] }
 #guard attemptedScope 10 != attemptedScope 11
+
+end BookkeepingCheck

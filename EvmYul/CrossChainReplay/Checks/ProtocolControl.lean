@@ -2,6 +2,8 @@ import EvmYul.CrossChainReplay.Protocol
 
 open EvmYul.CrossChainReplay
 
+namespace ProtocolControlCheck
+
 private def toyHash (bytes : Bytes) : Hash32 :=
   Vector.ofFn fun i => UInt8.ofNat (bytes.length + i.val)
 
@@ -11,7 +13,7 @@ private def params : Parameters :=
     localRollup := EvmYul.UInt256.ofNat 2
     manager := 0
     system := 0
-    proxyCreationCode := [] }
+    proxyCreationCode := [], decodeManagerEntry := fun _ => none }
 
 private def rootHash : Hash32 := toyHash [1, 2, 3]
 private def identity : EntryId := .driverLoaded 0 0
@@ -96,3 +98,5 @@ private def firstFailedCheckStops : Bool :=
   | .error (.entrySpansMultiplePeers expected found) =>
       expected == proxyEntry.declaredPeerRollup && found == EvmYul.UInt256.ofNat 3
   | _ => false
+
+end ProtocolControlCheck

@@ -11,7 +11,17 @@ structure ScopeRecord where
   deriving Repr, BEq
 
 inductive DriverPhase where
-  | beforeTransaction | inTransaction | afterTransaction | done
+  | beforeTransaction | inTransaction | done
+  deriving Repr, DecidableEq
+
+/-- One settled driver transaction. Validations and logs are retained only when committed. -/
+structure TransactionResult where
+  index : Nat
+  envelope : DriverEnvelope
+  outcome : FrameOutcome
+  committedValidations : List ValidationResult
+  committedLogs : List Bytes
+  settlement : List EngineObservation
   deriving Repr, BEq
 
 inductive FrameRole where
@@ -47,6 +57,8 @@ structure FrameCheckpoint (M : EvmModel) where
   liveLogs : List Bytes
   probe : Option ProbeResult
   pendingTransport : Option TransportEvidence := none
+  /-- Protocol validation events live at this checkpoint; restored with logs on rollback. -/
+  liveValidations : List ValidationResult := []
 
 structure ExecutionState (M : EvmModel) where
   world : M.World
@@ -66,6 +78,14 @@ structure ExecutionState (M : EvmModel) where
   completedScopes : List ScopeRecord := []
   /-- Audit numbering is monotonic across reverted attempts; it is not EVM storage. -/
   nextInvocation : Nat := 0
+  /-- Protocol-generated validation events not yet rolled back. Raw logs never populate this. -/
+  liveValidations : List ValidationResult := []
+  /-- Ordered driver envelopes; `driverIndex` selects the next one. -/
+  envelopes : List DriverEnvelope := []
+  /-- World after transaction initialization; a failed top-level frame settles from here. -/
+  transactionStart : Option M.World := none
+  /-- Settled driver transactions, in order. -/
+  transactions : List TransactionResult := []
 
 structure Configuration (M : EvmModel) where
   initialWorld : M.World
@@ -75,6 +95,8 @@ structure Configuration (M : EvmModel) where
   blockCapacity : Nat
   bundle : Bundle
   selected : EntryId
+  /-- Bundle entry whose expected hashes the selected occurrence must validate. -/
+  selectedEntry : Entry
   request : LogicalRequest
 
 def configurationHeight {M : EvmModel} (config : Configuration M) : Nat := config.height

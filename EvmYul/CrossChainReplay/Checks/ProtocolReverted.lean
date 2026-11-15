@@ -3,6 +3,8 @@ import EvmYul.CrossChainReplay.Checks.Fixtures
 
 open EvmYul.CrossChainReplay
 
+namespace ProtocolRevertedCheck
+
 #check ProtocolControl.validateLookup
 #check ProtocolContext.activeLookupIndex
 
@@ -81,3 +83,5 @@ private def failedFilterPreserved : Bool :=
   (findNestedLookup false key [successful, lookup]).map Prod.fst == some 1 &&
     (findNestedLookup true key [successful, lookup]).map Prod.fst == some 0
 #guard failedFilterPreserved
+
+end ProtocolRevertedCheck

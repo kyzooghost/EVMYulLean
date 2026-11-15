@@ -3,6 +3,8 @@ import EvmYul.CrossChainReplay.Checks.Fixtures
 
 open EvmYul.CrossChainReplay
 
+namespace ProxyDispatchCheck
+
 #check Step.deployIncomingProxy
 #check Step.resumeProxyCreation
 #check staticProxyError
@@ -183,3 +185,5 @@ example : Step FailureToy toyParams failureExiting
 #guard failureResumed.world.deployed.isEmpty
 #guard failureResumed.world.protocol.registry.isEmpty
 #guard failureResumed.pendingOutcome == some (.reverted [9])
+
+end ProxyDispatchCheck

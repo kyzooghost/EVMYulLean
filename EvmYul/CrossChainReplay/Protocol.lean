@@ -25,10 +25,10 @@ def hasDuplicateLookupHash (rows : List TopLevelLookup) : Bool :=
   | row :: rest => rest.any (fun other => other.crossChainCallHash == row.crossChainCallHash) ||
       hasDuplicateLookupHash rest
 
+/-- Loops are structural list traversals so concrete fixtures reduce definitionally. -/
 def checkCalls (peer : Word) (allowRoot : Bool) (calls : List IncomingCall) :
-    Except ProtocolError Unit := do
-  for h : i in [:calls.length] do
-    let call := calls[i]
+    Except ProtocolError Unit :=
+  calls.zipIdx.forM fun (call, i) => do
     if call.sourceRollupId != peer then
       throw (.entrySpansMultiplePeers peer call.sourceRollupId)
     if call.isStatic then
@@ -37,10 +37,9 @@ def checkCalls (peer : Word) (allowRoot : Bool) (calls : List IncomingCall) :
     else if !allowRoot || i != 0 then
       if call.value.toNat != 0 then throw .nonRootCallWithValue
 
-def checkNestedLookups (rows : List NestedLookup) : Except ProtocolError Unit := do
-  for row in rows do
-    let peer := (row.incomingCalls.head?).map (·.sourceRollupId)
-    match peer with
+def checkNestedLookups (rows : List NestedLookup) : Except ProtocolError Unit :=
+  rows.forM fun row =>
+    match (row.incomingCalls.head?).map (·.sourceRollupId) with
     | none => pure ()
     | some p => checkCalls p false row.incomingCalls
 
@@ -70,24 +69,20 @@ def loadBatch (_p : Parameters) (context : LoadContext) (batch : LoadBatch)
     let duplicate := batch.lookups.find? fun row =>
       (batch.lookups.filter (fun other => other.crossChainCallHash == row.crossChainCallHash)).length > 1
     throw (.duplicateLookupHash (duplicate.map (·.crossChainCallHash) |>.getD zeroHash))
-  for i in [:batch.entries.length] do
-    let some entry := batch.entries[i]? | throw .arrayOutOfBounds
+  batch.entries.zipIdx.forM fun (entry, i) =>
     checkEntry (context.route == .systemInbound && i == 0) entry
-  for row in batch.lookups do checkLookup row
-  let mut next := state
-  let mut ids : List EntryId := []
-  for i in [:batch.entries.length] do
-    let some entry := batch.entries[i]? | throw .arrayOutOfBounds
+  batch.lookups.forM checkLookup
+  let pushEntry := fun (next : ProtocolState) ((entry, i) : Entry × Nat) =>
     let hash := entry.proxyEntryHash
     let existing := (bucketFor hash next).getD { hash := hash, rows := [], head := 0 }
     let fresh := nextFreshHead context.height hash next
     let retained := if fresh < existing.rows.length then existing else { existing with rows := [], head := 0 }
-    let id := EntryId.driverLoaded context.loadIndex i
-    next := replaceBucket next { retained with rows := retained.rows ++
-      [{ id := id, row := entry, loadedBlock := currentStamp context.height, consumed := false }] }
-    ids := ids ++ [id]
-  for row in batch.lookups do
-    next := replaceLookup next { row := row, loadedBlock := currentStamp context.height, id := .topLevelLookup context.loadIndex row.crossChainCallHash }
+    replaceBucket next { retained with rows := retained.rows ++
+      [{ id := .driverLoaded context.loadIndex i, row := entry, loadedBlock := currentStamp context.height, consumed := false }] }
+  let next := batch.entries.zipIdx.foldl pushEntry state
+  let ids := batch.entries.zipIdx.map fun (_, i) => EntryId.driverLoaded context.loadIndex i
+  let next := batch.lookups.foldl (fun next row =>
+    replaceLookup next { row := row, loadedBlock := currentStamp context.height, id := .topLevelLookup context.loadIndex row.crossChainCallHash }) next
   if context.route == .systemInbound then
     let some first := batch.entries.head? | throw .emptyEntries
     let some root := first.incomingCalls.head? | throw .emptyIncomingCalls
@@ -136,15 +131,18 @@ def lookupKeyRepresentable (key : LookupKey) : Prop :=
 
 def nestedContextRepresentable (rowIndex : Nat) : Prop := rowIndex + 1 < 2 ^ 64
 
-def clearConsumed (_height : Nat) (hash : Hash32) (index : Nat) (state : ProtocolState) : ProtocolState :=
+/-- `_clearConsumedEntryAndDrain`: delete the row, persist `_nextFreshHead`, and drain the
+    bucket when no current row remains at or after the head. -/
+def clearConsumed (height : Nat) (hash : Hash32) (index : Nat) (state : ProtocolState) : ProtocolState :=
   match bucketFor hash state with
   | none => state
   | some bucket =>
       let rows := bucket.rows.zipIdx.map fun (row, i) =>
         if i == index then { row with consumed := true, loadedBlock := 0 } else row
-      let next := { bucket with rows := rows }
-      let next := if next.head >= rows.length then { next with rows := [], head := 0 } else next
-      replaceBucket state next
+      let cleared := replaceBucket state { bucket with rows := rows }
+      let head := nextFreshHead height hash cleared
+      if head == rows.length then replaceBucket cleared { bucket with rows := [], head := 0 }
+      else replaceBucket cleared { bucket with rows := rows, head := head }
 
 def activeEntryRow (state : ProtocolState) (id : EntryId) : Option (Nat × Entry) := do
   let bucket ← state.buckets.find? fun bucket => bucket.rows.any (fun row => row.id == id)
@@ -173,6 +171,11 @@ inductive ProtocolAction where
       (error : ProtocolError) (events : List ProtocolObservation)
   | revertedBytes (state : ProtocolState) (context : ProtocolContext)
       (data : Bytes) (events : List ProtocolObservation)
+  /-- Return raw bytes without the ABI `bytes` wrapper, as for a function with no outputs. -/
+  | returnedRaw (state : ProtocolState) (context : ProtocolContext)
+      (data : Bytes) (events : List ProtocolObservation)
+  /-- A persistent write or log attempted under inherited static permission. -/
+  | staticWriteViolation (context : ProtocolContext) (events : List ProtocolObservation)
 
 def protocolFailure (state : ProtocolState) (context : ProtocolContext)
     (error : ProtocolError) (events : List ProtocolObservation := []) : ProtocolAction :=
@@ -244,6 +247,44 @@ def incomingProxyError (p : Parameters) (state : ProtocolState) (row : IncomingC
       if proxyRegistered p state row && row.isStatic && row.value.toNat != 0 then some .staticCallWithValue
       else none
 
+/-- Source order in `executeIncomingCrossChainCall`, checked before duplicate/peer preflight. -/
+def inboundBindingError (p : Parameters) (hash : Hash32) (batch : LoadBatch)
+    (value : Word) : Option ProtocolError :=
+  match batch.entries.head? with
+  | none => some .emptyEntries
+  | some first =>
+      match first.incomingCalls.head? with
+      | none => some .emptyIncomingCalls
+      | some root =>
+          let identity : CallIdentity :=
+            { isStatic := root.isStatic, sourceAddress := root.sourceAddress,
+              sourceRollupId := root.sourceRollupId, targetAddress := root.targetAddress,
+              targetRollupId := p.localRollup, value := root.value, data := root.data }
+          let rowHash := callHash p.keccak identity
+          if hash != rowHash || first.proxyEntryHash != rowHash then some .entryHashMismatch
+          else if first.declaredPeerRollup != root.sourceRollupId then
+            some (.entrySpansMultiplePeers first.declaredPeerRollup root.sourceRollupId)
+          else if value != root.value then some .valueMismatch
+          else none
+
+/-- Initial manager control for a decoded external call. `loadExecutionTable` and
+    `staticCallLookup` are nonpayable; the dispatcher rejects value before modifiers run. -/
+def managerEntryControl (height loadIndex : Nat) (caller : Address) (value : Word)
+    : Option ManagerEntryCall → ProtocolControl
+  | none => .rejectEntry
+  | some (.loadTable entries lookups) =>
+      if value.toNat != 0 then .rejectEntry
+      else .load { entries := entries, lookups := lookups }
+        { height := height, loadIndex := loadIndex, route := .proxy, caller := caller, attachedValue := value }
+  | some (.executeInbound hash entries lookups) =>
+      .inboundEntry hash { entries := entries, lookups := lookups }
+        { height := height, loadIndex := loadIndex, route := .systemInbound, caller := caller, attachedValue := value }
+  | some (.executeCrossChain source data) =>
+      .invoke { proxy := caller, source := source, value := value, data := data, isStatic := false }
+  | some (.staticLookup source data) =>
+      if value.toNat != 0 then .rejectEntry
+      else .invoke { proxy := caller, source := source, value := value, data := data, isStatic := true }
+
 def registerIncomingProxy (p : Parameters) (state : ProtocolState) (row : IncomingCall) : ProtocolState :=
   let address := proxyAddress p row.sourceAddress row.sourceRollupId
   let registered : ProxyRegistration := { proxy := address, originalAddress := row.sourceAddress, originalRollup := EvmYul.UInt256.ofNat (row.sourceRollupId.toNat % 2^64) }
@@ -258,6 +299,8 @@ def advanceProtocol (p : Parameters) (context : ProtocolContext) (state : Protoc
       | none => protocolFailure state context .unauthorizedProxy
       | some registered =>
           if registered.originalAddress == 0 then protocolFailure state context .unauthorizedProxy
+          else if !invocation.isStatic && context.staticPermission then
+            .staticWriteViolation context []
           else if !invocation.isStatic && invocation.value.toNat > 0 then
             .dispatchSystem state { context with control := .resumeSystem invocation registered false } invocation.value []
           else .local state { context with control := .managerRoute invocation registered } []
@@ -297,9 +340,23 @@ def advanceProtocol (p : Parameters) (context : ProtocolContext) (state : Protoc
               .local { state with structuralHash := zeroHash, crossChainHash := zeroHash, incomingCursor := 0, outgoingCursor := 0 }
                 { context with activeScope := some scope, hostEntry := some loaded.id, lookupHost := some hash, activeLookupIndex := none, activeLookupPeer := some peer, lookupContext := 0, control := .processIncoming scope lookup.callCount.toNat 0 (.lookupValidation lookup) } []
   | .load batch loadContext =>
-      match loadBatch p loadContext batch state with
+      if loadContext.caller != p.system then protocolFailure state context .unauthorized
+      else match loadBatch p loadContext batch state with
       | .error error => protocolFailure state context error
-      | .ok loaded => .local loaded.state { context with control := .idle } []
+      | .ok loaded =>
+          if context.staticPermission then .staticWriteViolation context []
+          else .returnedRaw loaded.state { context with control := .finished } [] []
+  | .inboundEntry hash batch loadContext =>
+      if loadContext.caller != p.system then protocolFailure state context .unauthorized
+      else match inboundBindingError p hash batch loadContext.attachedValue with
+      | some error => protocolFailure state context error
+      | none =>
+          match loadBatch p loadContext batch state with
+          | .error error => protocolFailure state context error
+          | .ok loaded =>
+              if context.staticPermission then .staticWriteViolation context []
+              else .local loaded.state { context with control := .selectInbound hash loaded } []
+  | .rejectEntry => .revertedBytes state { context with control := .finished } [] []
   | .selectProxy hash peer =>
       match selectProxyEntry p context.height hash peer state with
       | .error .executionNotFound => .local state { context with control := .resolveTopLookup hash peer false } []
@@ -507,7 +564,8 @@ def advanceProtocol (p : Parameters) (context : ProtocolContext) (state : Protoc
           else if !outgoingOk then protocolFailure state context .unconsumedOutgoingCalls checks
           else
             let validation : ValidationResult :=
-              { selected := scope.entry, structuralHash := state.structuralHash, crossChainHash := cross, incomingConsumed := state.incomingCursor, outgoingConsumed := state.outgoingCursor }
+              { selected := scope.entry, entryHash := entry.proxyEntryHash,
+                declaredPeer := entry.declaredPeerRollup, structuralHash := state.structuralHash, crossChainHash := cross, incomingConsumed := state.incomingCursor, outgoingConsumed := state.outgoingCursor }
             let cleaned := clearConsumed context.height entry.proxyEntryHash index state
             .returned { cleaned with incomingCursor := 0 }
               { context with control := .finished } entry.returnData

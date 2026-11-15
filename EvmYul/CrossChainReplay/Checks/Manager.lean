@@ -3,6 +3,8 @@ import EvmYul.CrossChainReplay.Checks.Fixtures
 
 open EvmYul.CrossChainReplay
 
+namespace ManagerCheck
+
 #check ManagerInvocation
 #check Step.managerCall
 #check Step.dispatchSystem
@@ -111,3 +113,5 @@ private def staticTopLookup : Bool :=
   | _ => false
 #guard (encodeBytesReturn [9]).length == 96
 #guard (encodeBytesReturn [9]).take 32 == wordBytes 32
+
+end ManagerCheck

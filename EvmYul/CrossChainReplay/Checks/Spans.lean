@@ -4,6 +4,8 @@ import EvmYul.CrossChainReplay.Checks.Fixtures
 
 open EvmYul.CrossChainReplay
 
+namespace SpansCheck
+
 deriving instance DecidableEq for Except
 
 #check ProtocolAction.dispatchSpan
@@ -186,3 +188,5 @@ private def clearedTop : ProtocolState := setIncomingSpan topContext scope 0 0 t
 
 #guard (spanScopeAdoption (some scope) result
   (some { result := emittedResult, scopes := [scopeRecord] }) [scopeRecord]).head? == some scopeRecord
+
+end SpansCheck
